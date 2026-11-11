@@ -1,0 +1,3 @@
+# Text files with LF line ends, PNG as binary
+* text=auto eol=lf
+*.png binary

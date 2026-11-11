@@ -1,4 +1,4 @@
-# Vertraulich (siehe CLAUDE.md)
+# Vertraulich
 *.gh
 *.3dm
 *.3dmbak
@@ -6,3 +6,6 @@ legacy/
 References/
 
 node_modules/
+
+# lokale Arbeitsregeln, nicht für das öffentliche Repo
+CLAUDE.md

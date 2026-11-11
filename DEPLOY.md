@@ -63,20 +63,19 @@ Die erste Zeile zeigt, was versioniert ist, die zweite, was je
 versioniert war (Historie). Beides darf keine Datei und keinen Ordner
 enthalten, die in `.gitignore` unter «Vertraulich» stehen. In
 Dateien und Commit-Texten kommen keine Projektnamen aus vertraulichen
-Unterlagen und keine Namen kommerzieller Programme vor:
+Unterlagen und keine Namen kommerzieller Ingenieurprogramme vor:
 
 ```sh
 git grep -n -i -E "<Name 1>|<Name 2>" $(git rev-list --all)
 ```
 
 (die Namen aus den vertraulichen Unterlagen einsetzen; nicht in dieser
-Datei aufschreiben). Die Regeln dafür stehen in `CLAUDE.md`, die Muster in
-`.gitignore`.
+Datei aufschreiben). Die Muster stehen in `.gitignore`.
 
-`CLAUDE.md` ist versioniert und würde mit dem Repo öffentlich. Es enthält
-nur Arbeitsregeln, keine vertraulichen Angaben. Wer das nicht will, nimmt
-die Datei vor dem ersten Push in `.gitignore` auf und entfernt sie mit
-`git rm --cached CLAUDE.md`.
+`CLAUDE.md` (Arbeitsregeln für die lokale Arbeit) ist in `.gitignore` und
+nicht im Repo; sie bleibt nur lokal. Sie steht nicht in `git ls-files`.
+Die frühere Historie wird nicht umgeschrieben: Frühere Commits enthalten
+eine Fassung der Datei (nur Arbeitsregeln, keine vertraulichen Angaben).
 
 ## 1 Projekt anlegen (Cloudflare-Dashboard)
 

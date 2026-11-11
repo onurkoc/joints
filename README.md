@@ -72,3 +72,7 @@ It starts the local server, goes through the app and writes screenshots and exam
 | `tests/` | Unit tests and the browser check |
 
 No build step, no framework, no runtime dependencies.
+
+## License
+
+[MIT](LICENSE), © 2026 Onur Koc.
