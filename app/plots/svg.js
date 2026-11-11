@@ -133,6 +133,6 @@ export function haloText(mode, kind, j, attrs, content) {
   const main = `<text ${sty(mode, kind, j)} ${attrs}>${content}</text>`;
   if (mode === 'screen') return main;
   const bold = kind === 'cardinal' ? '700' : '600';
-  const halo = `<text ${attrs} font-size="12" font-weight="${bold}" fill="${EXPORT_COLORS.white}" stroke="${EXPORT_COLORS.white}" stroke-width="3" stroke-linejoin="round">${content}</text>`;
+  const halo = `<text ${attrs} font-size="12" font-weight="${bold}" fill="${EXPORT_COLORS.white}" stroke="${EXPORT_COLORS.white}" stroke-width="4" stroke-linejoin="round">${content}</text>`;
   return halo + main;
 }

@@ -211,12 +211,13 @@ svg.net .rim { fill: none; stroke: var(--net-rim); stroke-width: 1.5; }
 svg.net .cardinal { font-weight: 700; font-size: 13px; }
 svg.net .tunnel-line { stroke: var(--tunnel); stroke-width: 2.5; }
 svg.net .tunnel-head { fill: var(--tunnel); stroke: var(--tunnel); stroke-width: 1; stroke-linejoin: round; }
-svg.net .tunnel-label { fill: var(--tunnel); font-weight: 600; paint-order: stroke; stroke: var(--halo); stroke-width: 3px; stroke-linejoin: round; }
+svg.net .labels { pointer-events: none; }
+svg.net .tunnel-label { fill: var(--tunnel); font-weight: 600; paint-order: stroke; stroke: var(--halo); stroke-width: 4px; stroke-linejoin: round; }
 svg.net .joint .gc { fill: none; stroke: var(--c); stroke-width: 2; }
 svg.net .joint .hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
 svg.net .joint .pole { fill: var(--c); stroke: var(--halo); stroke-width: 1.5; }
 svg.net .joint .hit-pole { fill: transparent; }
-svg.net .joint .plabel { fill: var(--c); font-weight: 600; paint-order: stroke; stroke: var(--halo); stroke-width: 3px; stroke-linejoin: round; }
+svg.net .plabel { fill: var(--c); font-weight: 600; paint-order: stroke; stroke: var(--halo); stroke-width: 4px; stroke-linejoin: round; }
 svg.net .joint:hover .gc { stroke-width: 3.5; }
 svg.net .joint:hover .pole { r: 7; }
 

@@ -1,4 +1,4 @@
-// Browser-Check der App in Microsoft Edge (headless, Chrome DevTools Protocol).
+// Browser-Check der App in einem Chromium-Browser (headless, Chrome DevTools Protocol).
 // Gehört nicht zu "npm test" (braucht Edge); einmal je Auftrag ausführen mit
 //
 //     node tests/browser/check.mjs [--edge <Pfad zu msedge.exe>]
@@ -133,6 +133,29 @@ try {
     await waitFor('!window.__old && Boolean(window.app && window.app.ready)', `App bereit: ${url.slice(0, 60)}`);
     await sleep(300);
   };
+  /** Alle Beschriftungen im Netz: Überdeckung untereinander, Lage zum Netzrand und zum SVG. */
+  const LABELS = `(() => {
+    const rim = document.querySelector('svg.net .rim').getBoundingClientRect();
+    const svg = document.querySelector('svg.net').getBoundingClientRect();
+    const cx = rim.x + rim.width / 2, cy = rim.y + rim.height / 2, R = rim.width / 2;
+    const items = [...document.querySelectorAll('svg.net .labels text')].map((el) => {
+      const b = el.getBBox();
+      const m = el.getScreenCTM();
+      const pts = [[b.x, b.y], [b.x + b.width, b.y], [b.x + b.width, b.y + b.height], [b.x, b.y + b.height]]
+        .map(([x, y]) => ({ x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }));
+      const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+      return { text: el.textContent, pts, x1: Math.min(...xs), x2: Math.max(...xs), y1: Math.min(...ys), y2: Math.max(...ys) };
+    });
+    const overlaps = [];
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const a = items[i], b = items[j];
+      const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1), h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+      if (w > 1.5 && h > 1.5) overlaps.push(a.text + ' / ' + b.text);
+    }
+    const outside = items.filter((it) => it.pts.some((p) => Math.hypot(p.x - cx, p.y - cy) > R + 1)).map((it) => it.text);
+    const outSvg = items.filter((it) => it.x1 < svg.left - 0.5 || it.x2 > svg.right + 0.5 || it.y1 < svg.top - 0.5 || it.y2 > svg.bottom + 0.5).map((it) => it.text);
+    return { count: items.length, overlaps, outside, outSvg };
+  })()`;
   const center = (sel, i = 0) => evaluate(`(() => { const r = document.querySelectorAll(${JSON.stringify(sel)})[${i}].getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
   const click = async (sel) => {
     await evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
@@ -196,17 +219,15 @@ try {
   check('Querschnitt: gleicher Massstab (Fenster 30 m × 20.5 m, Profil 10 m × 8 m)',
     Math.abs(geom.frameRatio - 30 / 20.5) < 0.01 && Math.abs(geom.profileW - 10.1) < 0.5 && Math.abs(geom.profileH - 8.1) < 0.5, geom);
 
-  // «Tunnel 118°» darf keine Kluftbeschriftung überdecken
-  const overlap = await evaluate(`(() => {
-    const t = document.querySelector('svg.net .tunnel-label').getBoundingClientRect();
-    const hits = [];
-    for (const el of document.querySelectorAll('svg.net .plabel')) {
-      const r = el.getBoundingClientRect();
-      if (t.left < r.right && t.right > r.left && t.top < r.bottom && t.bottom > r.top) hits.push(el.textContent);
-    }
-    return hits;
-  })()`);
-  check('«Tunnel 118°» überdeckt keine Kluftbeschriftung', overlap.length === 0, overlap);
+  // Beschriftungen im Netz: keine Überdeckung, nichts über dem Netzrand
+  const lab = await evaluate(LABELS);
+  check('Netz (Desktop): 4 Beschriftungen, keine überdeckt eine andere', lab.count === 4 && lab.overlaps.length === 0, lab);
+  check('Netz (Desktop): keine Beschriftung ragt über den Netzrand', lab.outside.length === 0 && lab.outSvg.length === 0, lab);
+  // fünf Pole am selben Ort
+  await act(`(() => { const s = structuredClone(window.app.state); s.joints = [1, 2, 3, 4, 5].map((i) => ({ name: 'K' + i, dipDirection: 120, dip: 40, spacing: 2 })); window.app.set(s); })()`);
+  const lab5 = await evaluate(LABELS);
+  check('Netz, fünf Pole am selben Ort: 6 Beschriftungen, keine Überdeckung, nichts über dem Rand', lab5.count === 6 && lab5.overlaps.length === 0 && lab5.outside.length === 0 && lab5.outSvg.length === 0, lab5);
+  await act(`document.getElementById('reset-defaults').click()`);
 
   // --- Hover ----------------------------------------------------------------
   const hoverSynthetic = (sel) => evaluate(`(() => {
@@ -402,6 +423,8 @@ try {
       cardinals: [...document.querySelectorAll('svg.net .cardinal')].every((t) => { const r = t.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth; }),
     };
   })()`);
+  const labPhone = await evaluate(LABELS);
+  check('Netz (390 px): keine Beschriftung überdeckt eine andere oder ragt über den Netzrand', labPhone.count === 4 && labPhone.overlaps.length === 0 && labPhone.outside.length === 0 && labPhone.outSvg.length === 0, labPhone);
   check('390 px: Seite nicht breiter als das Fenster', phone.scrollW <= phone.inner, phone);
   check('390 px: Netz vollständig sichtbar (Rand, N E S W), Querschnitt und Export-Knopf im Fenster',
     phone.net[0] >= 0 && phone.net[1] <= phone.inner && phone.cardinals && phone.section[0] >= 0 && phone.section[1] <= phone.inner && phone.btn[1] <= phone.inner && phone.inputsAbove, phone);
