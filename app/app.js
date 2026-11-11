@@ -12,6 +12,9 @@ import { setupThemeSwitch } from './ui/theme.js';
 import { setupTooltip } from './ui/tooltip.js';
 import { renderStereonet } from './plots/stereonet.js';
 import { renderSection } from './plots/section.js';
+import { encodeState, decodeState } from './link.js';
+import { exportStereonet, exportSection, exportBoth } from './export.js';
+import { downloadBlob, svgBlob, svgToPngBlob, copyText } from './ui/download.js';
 
 /** @typedef {import('./state.js').State} State */
 
@@ -28,13 +31,18 @@ function $(id) {
 
 function main() {
   /** @type {State} */
-  let state = defaultState();
+  let state = decodeState(location.hash);
   let pending = false;
   let runs = 0;
   /** @type {import('./model.js').Model | null} */
   let model = null;
   /** @type {Record<string, string>} */
   let errors = {};
+  /** URL-Teil, den die App zuletzt selbst geschrieben hat */
+  let lastHash = '';
+  /** letzte erzeugte Datei (für den Browser-Check) */
+  /** @type {{name: string, blob: Blob} | null} */
+  let lastDownload = null;
 
   const inputs = renderInputs($('input-form'), {
     onAzimuth(v) { change((s) => { s.tunnelAzimuth = v; }); },
@@ -48,6 +56,7 @@ function main() {
     onAdd() { change((s) => { if (s.joints.length < MAX_JOINTS) s.joints.push(newJoint(s.joints.length)); }); },
     onRemove(i) { change((s) => { s.joints.splice(i, 1); }); },
     onReset() { replace(defaultState()); },
+    onCopyLink() { copyLink(); },
   });
 
   /** @param {(s: State) => void} fn */
@@ -92,8 +101,78 @@ function main() {
     model = buildModel(state, errors);
     draw();
     renderResults($('results'), model);
+    updateButtons(v.valid);
+    if (v.valid) writeHash();
     runs++;
   }
+
+  /**
+   * Eingaben im URL-Teil führen; im Standardzustand bleibt der URL-Teil leer.
+   * Bei ungültigen Eingaben bleibt der letzte gültige Link stehen.
+   */
+  function writeHash() {
+    const enc = encodeState(state);
+    lastHash = enc === encodeState(defaultState()) ? '' : `#${enc}`;
+    if (location.hash !== lastHash) {
+      history.replaceState(null, '', location.pathname + location.search + lastHash);
+    }
+  }
+
+  /** @param {boolean} valid */
+  function updateButtons(valid) {
+    for (const id of ['copy-link', 'export-net-svg', 'export-net-png', 'export-section-svg', 'export-section-png', 'export-both-png']) {
+      const b = /** @type {HTMLButtonElement} */ ($(id));
+      b.disabled = !valid;
+      if (!valid) b.title = 'Fix the invalid input first';
+      else b.removeAttribute('title');
+    }
+  }
+
+  /** @param {string} name @param {Blob} blob */
+  function save(name, blob) {
+    lastDownload = { name, blob };
+    downloadBlob(name, blob);
+  }
+
+  /**
+   * @param {string} base Dateiname ohne Endung
+   * @param {{svg: string, width: number, height: number} | null} img
+   * @param {'svg'|'png'} kind
+   */
+  async function exportImage(base, img, kind) {
+    if (!img) return;
+    if (kind === 'svg') save(`${base}.svg`, svgBlob(img.svg));
+    else save(`${base}.png`, await svgToPngBlob(img.svg, img.width, img.height, 2));
+  }
+
+  /** @type {Array<[string, () => Promise<void>]>} */
+  const exportActions = [
+    ['export-net-svg', () => exportImage('joints_stereonet', model && exportStereonet(model), 'svg')],
+    ['export-net-png', () => exportImage('joints_stereonet', model && exportStereonet(model), 'png')],
+    ['export-section-svg', () => exportImage('joints_section', model && exportSection(model), 'svg')],
+    ['export-section-png', () => exportImage('joints_section', model && exportSection(model), 'png')],
+    ['export-both-png', () => exportImage('joints_both', model && exportBoth(model), 'png')],
+  ];
+  for (const [id, action] of exportActions) {
+    $(id).addEventListener('click', () => {
+      action().catch((err) => {
+        $('msg').hidden = false;
+        $('msg').textContent = `Export failed: ${err.message}`;
+      });
+    });
+  }
+
+  async function copyLink() {
+    const btn = $('copy-link');
+    const ok = await copyText(location.href);
+    btn.textContent = ok ? 'Link copied' : 'Copy failed';
+    setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
+  }
+
+  // Link von Hand geändert (eingefügt, Verlauf): Eingaben daraus lesen
+  window.addEventListener('hashchange', () => {
+    if (location.hash !== lastHash) replace(decodeState(location.hash));
+  });
 
   // Grafiken folgen der Breite ihres Feldes
   /** @type {Map<Element, number>} */
@@ -124,6 +203,7 @@ function main() {
     get model() { return model; },
     get errors() { return errors; },
     get runs() { return runs; },
+    get lastDownload() { return lastDownload; },
     set(/** @type {State} */ s) { replace(s); },
     ready: true,
   };

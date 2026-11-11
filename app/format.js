@@ -54,6 +54,38 @@ export function fallsTo(side, magnitude) {
 }
 
 /**
+ * Zahl mit festgelegter Mindestzahl Stellen vor dem Komma, z. B. (7, 3) -> "007".
+ * @param {number} v
+ * @param {number} width
+ * @returns {string}
+ */
+function padAngle(v, width) {
+  const s = fmtAngle(v);
+  if (!Number.isFinite(v) || v < 0) return s;
+  const [int, frac] = s.split('.');
+  return int.padStart(width, '0') + (frac ? `.${frac}` : '');
+}
+
+/**
+ * Fallrichtung/Fallen, dreistellig/zweistellig, z. B. "295/85", "007/05".
+ * @param {number} dipDirection
+ * @param {number} dip
+ * @returns {string}
+ */
+export function fmtOrientation(dipDirection, dip) {
+  return `${padAngle(dipDirection, 3)}/${padAngle(dip, 2)}`;
+}
+
+/**
+ * Länge in m, höchstens 2 Nachkommastellen ohne überflüssige Nullen ("10", "7.25").
+ * @param {number} v
+ * @returns {string}
+ */
+export function fmtLength(v) {
+  return Number.isFinite(v) ? String(Number(v.toFixed(2))) : '–';
+}
+
+/**
  * Beschriftung einer Kluft: Name, dann Fallrichtung/Fallen, z. B. "Kl 1b 295/85".
  * @param {string} name
  * @param {number} dipDirection
@@ -61,7 +93,7 @@ export function fallsTo(side, magnitude) {
  * @returns {string}
  */
 export function jointLabel(name, dipDirection, dip) {
-  const o = `${fmtAngle(dipDirection)}/${fmtAngle(dip)}`;
+  const o = fmtOrientation(dipDirection, dip);
   const n = name.trim();
   return n ? `${n} ${o}` : o;
 }

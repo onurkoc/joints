@@ -39,13 +39,28 @@
       <div id="msg" class="msg" role="alert" hidden>Invalid input – affected elements are not drawn.</div>
       <div id="plots" class="plots">
         <section class="card plot-card" aria-labelledby="title-net">
-          <h2 id="title-net">Stereonet – equal area, lower hemisphere</h2>
+          <div class="plot-head">
+            <h2 id="title-net">Stereonet – equal area, lower hemisphere</h2>
+            <div class="actions">
+              <button type="button" id="export-net-svg" title="Download the stereonet as SVG">SVG</button>
+              <button type="button" id="export-net-png" title="Download the stereonet as PNG">PNG</button>
+            </div>
+          </div>
           <div id="plot-net" class="plot"></div>
         </section>
         <section class="card plot-card" aria-labelledby="title-section">
-          <h2 id="title-section">Cross-section – looking in tunnel direction</h2>
+          <div class="plot-head">
+            <h2 id="title-section">Cross-section – looking in tunnel direction</h2>
+            <div class="actions">
+              <button type="button" id="export-section-svg" title="Download the cross-section as SVG">SVG</button>
+              <button type="button" id="export-section-png" title="Download the cross-section as PNG">PNG</button>
+            </div>
+          </div>
           <div id="plot-section" class="plot"></div>
         </section>
+      </div>
+      <div class="actions plots-actions">
+        <button type="button" id="export-both-png" title="Download stereonet and cross-section in one PNG">Export both (PNG)</button>
       </div>
       <section class="card results" aria-labelledby="results-title">
         <h2 id="results-title">Results</h2>

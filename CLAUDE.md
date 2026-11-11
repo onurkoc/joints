@@ -45,4 +45,7 @@
   Tunnel: violett.
 - Beschriftung einer Kluft: Name, dann Fallrichtung/Fallen, z. B. «Kl 1b 295/85».
 - Umschalter System / Light / Dark. Alle Farben über CSS-Variablen, auch im SVG.
-- Browser-Check nur einmal ausführen, keine Wiederholungsserien.
+- Browser-Check: einmal je Auftrag, am Ende nach der letzten Änderung.
+  Schlägt er fehl: korrigieren und genau einen weiteren Lauf machen. Keine Serien.
+- Kluftbeschriftung dreistellig/zweistellig (Fallrichtung/Fallen), z. B. «007/05».
+- Export immer im hellen Farbschema auf weissem Grund, unabhängig vom Theme.

@@ -3,7 +3,7 @@
 Ergebnistabelle unter den Grafiken. Spalten:
 Joint | Dip dir / Dip | Apparent dip | Falls to | Apparent spacing [m] | Note
 */
-import { esc, fmtAngle, fmtApparentDip, fmtMetres } from '../format.js';
+import { esc, fmtApparentDip, fmtMetres, fmtOrientation } from '../format.js';
 import { jointColorVar } from '../plots/svg.js';
 
 /** @typedef {import('../model.js').Model} Model */
@@ -30,7 +30,7 @@ export function resultRows(model) {
   return model.joints.map((j) => ({
     index: j.index,
     joint: j.name.trim() || `Joint ${j.index + 1}`,
-    orientation: j.netValid ? `${fmtAngle(j.dipDirection)} / ${fmtAngle(j.dip)}` : '–',
+    orientation: j.netValid ? fmtOrientation(j.dipDirection, j.dip) : '–',
     apparentDip: j.dipApparent ? fmtApparentDip(j.dipApparent.value) : '–',
     fallsTo: j.dipApparent ? j.dipApparent.text : '–',
     apparentSpacing: j.spacingApparent !== null ? fmtMetres(j.spacingApparent) : '–',

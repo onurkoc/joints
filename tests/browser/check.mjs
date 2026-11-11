@@ -1,12 +1,14 @@
 // Browser-Check der App in Microsoft Edge (headless, Chrome DevTools Protocol).
-// Gehört nicht zu "npm test" (braucht Edge); einmal ausführen mit
+// Gehört nicht zu "npm test" (braucht Edge); einmal je Auftrag ausführen mit
 //
 //     node tests/browser/check.mjs [--edge <Pfad zu msedge.exe>]
 //
 // Startet serve.mjs auf einem freien Port, öffnet die App mit den Standardwerten und prüft:
-// keine Konsolenfehler, keine Anfragen an andere Hosts, Grafiken und Tabelle, Hover-Texte,
-// Eingabefehler, Add/Remove/Reset, Farbwechsel Light/Dark, kein Querscrollen bei 390 px.
-// Screenshots: docs/screenshots/ (Desktop hell, Desktop dunkel, 390 px).
+// keine Konsolenfehler, keine Anfragen an andere Hosts, Grafiken und Tabelle, Hover-Texte
+// (echte Mausbewegung), Tunnelbeschriftung ohne Überdeckung, Eingabefehler, Add/Remove/Reset,
+// Link mit Eingaben (Schreiben, Laden, kaputter Link), Export (SVG und PNG, im dunklen Theme
+// erzeugt, trotzdem hell), Light/Dark, 390 px.
+// Ausgabe: docs/screenshots/ (Desktop hell, Desktop dunkel, 390 px) und docs/screenshots/export/.
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +18,7 @@ import { createServer } from 'node:net';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHOTS = join(ROOT, 'docs', 'screenshots');
+const EXPORTS = join(SHOTS, 'export');
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(name);
   return i > 0 ? process.argv[i + 1] : fallback;
@@ -39,7 +42,7 @@ function check(name, ok, info) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${info === undefined ? '' : ' – ' + (typeof info === 'string' ? info : JSON.stringify(info))}`);
 }
 
-mkdirSync(SHOTS, { recursive: true });
+mkdirSync(EXPORTS, { recursive: true });
 const server = await startServer(0);
 const origin = `http://127.0.0.1:${server.address().port}`;
 const cdpPort = await freePort();
@@ -110,6 +113,7 @@ try {
     await send('Page.bringToFront');
   };
   const shot = async (name, width, height, mobile) => {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 });
     const h = await evaluate('Math.ceil(document.documentElement.scrollHeight)');
     await viewport(width, Math.max(height, h), mobile);
     await sleep(500);
@@ -119,28 +123,48 @@ try {
     await sleep(300);
     console.log(`     Screenshot docs/screenshots/${name}.png`);
   };
+  /** Neu laden. Der Parameter r erzwingt eine echte Navigation (sonst wäre ein Fragmentwechsel nur ein hashchange). */
+  let loads = 0;
+  const load = async (url) => {
+    const u = new URL(url);
+    u.searchParams.set('r', String(++loads));
+    await evaluate('window.__old = true').catch(() => {});
+    await send('Page.navigate', { url: u.toString() });
+    await waitFor('!window.__old && Boolean(window.app && window.app.ready)', `App bereit: ${url.slice(0, 60)}`);
+    await sleep(300);
+  };
+  const center = (sel, i = 0) => evaluate(`(() => { const r = document.querySelectorAll(${JSON.stringify(sel)})[${i}].getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  const click = async (sel) => {
+    await evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
+    const c = await center(sel);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: c.x, y: c.y });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: c.x, y: c.y, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: c.x, y: c.y, button: 'left', clickCount: 1 });
+  };
 
   await send('Runtime.enable');
   await send('Log.enable');
   await send('Network.enable');
   await send('Page.enable');
+  await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
   await viewport(1440, 900, false);
-  await send('Page.navigate', { url: `${origin}/` });
-  await waitFor('Boolean(window.app && window.app.ready)', 'App bereit');
-  await sleep(300);
+  await load(`${origin}/`);
+  const defaultJson = await evaluate('JSON.stringify(window.app.state)');
 
   // --- Standardwerte ------------------------------------------------------
   const rows = await evaluate(`[...document.querySelectorAll('#results tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent))`);
   console.log('     Ergebnistabelle:', JSON.stringify(rows));
   check('Tabelle: 3 Zeilen, Spalten wie im Auftrag', rows.length === 3 && rows[0].length === 6);
-  check('Tabelle: Kl 1b 295 / 85 → 31° right', rows[0][0] === 'Kl 1b' && rows[0][1] === '295 / 85' && rows[0][2] === '31°' && rows[0][3] === 'right', rows[0]);
-  check('Tabelle: Kl 2b 207 / 86 → 86° right', rows[1][1] === '207 / 86' && rows[1][2] === '86°' && rows[1][3] === 'right', rows[1]);
-  check('Tabelle: SS 317 / 50 → 21° left', rows[2][1] === '317 / 50' && rows[2][2] === '21°' && rows[2][3] === 'left', rows[2]);
+  check('Tabelle: Kl 1b 295/85 → 31° right', rows[0][0] === 'Kl 1b' && rows[0][1] === '295/85' && rows[0][2] === '31°' && rows[0][3] === 'right', rows[0]);
+  check('Tabelle: Kl 2b 207/86 → 86° right', rows[1][1] === '207/86' && rows[1][2] === '86°' && rows[1][3] === 'right', rows[1]);
+  check('Tabelle: SS 317/50 → 21° left', rows[2][1] === '317/50' && rows[2][2] === '21°' && rows[2][3] === 'left', rows[2]);
   check('Tabelle: Abstände 9.85 / 1.00 / 1.45', rows.map((r) => r[4]).join(' ') === '9.85 1.00 1.45', rows.map((r) => r[4]));
   const convention = await evaluate(`document.querySelector('.convention').textContent`);
   check('Konventionszeile', convention === 'Azimuth clockwise from north. Section perpendicular to tunnel axis, looking in tunnel direction. tan β = tan α · sin(dip direction − A).', convention);
   const titles = await evaluate(`[document.getElementById('title-net').textContent, document.getElementById('title-section').textContent]`);
   check('Titel', titles[0] === 'Stereonet – equal area, lower hemisphere' && titles[1] === 'Cross-section – looking in tunnel direction (118°)', titles);
+  const nohash = await evaluate('location.hash');
+  check('Standardzustand: URL-Teil leer', nohash === '', nohash);
 
   // --- Grafiken -----------------------------------------------------------
   const counts = await evaluate(`({
@@ -151,6 +175,7 @@ try {
     head: document.querySelectorAll('svg.net .tunnel-head').length,
     cardinals: [...document.querySelectorAll('svg.net .cardinal')].map((t) => t.textContent).join(''),
     tunnelLabel: document.querySelector('svg.net .tunnel-label')?.textContent,
+    plabels: [...document.querySelectorAll('svg.net .plabel')].map((t) => t.textContent),
     sets: document.querySelectorAll('svg.section .set').length,
     profile: document.querySelectorAll('svg.section .profile').length,
     sides: [...document.querySelectorAll('svg.section .side')].map((t) => t.textContent),
@@ -159,6 +184,7 @@ try {
   check('Netz: 3 Grosskreise und 3 Pole', counts.joints === 3 && counts.gc === 3 && counts.poles === 3, counts);
   check('Netz: Tunnellinie mit Pfeil, N E S W', counts.tunnel === 1 && counts.head === 1 && counts.cardinals === 'NSEW', counts);
   check('Netz: Beschriftung «Tunnel 118°»', counts.tunnelLabel === 'Tunnel 118°', counts.tunnelLabel);
+  check('Netz: Kluftbeschriftung Name + 3-/2-stellig', counts.plabels.join('|') === 'Kl 1b 295/85|Kl 2b 207/86|SS 317/50', counts.plabels);
   check('Querschnitt: 3 Spurenscharen, 1 Profil', counts.sets === 3 && counts.profile === 1, counts);
   check('Querschnitt: left (028°) / right (208°)', counts.sides.join('|') === 'left (028°)|right (208°)', counts.sides);
   check('Querschnitt: Massstabsbalken in m', /^\d+(\.\d+)? m$/.test(counts.bar ?? ''), counts.bar);
@@ -170,18 +196,40 @@ try {
   check('Querschnitt: gleicher Massstab (Fenster 30 m × 20.5 m, Profil 10 m × 8 m)',
     Math.abs(geom.frameRatio - 30 / 20.5) < 0.01 && Math.abs(geom.profileW - 10.1) < 0.5 && Math.abs(geom.profileH - 8.1) < 0.5, geom);
 
+  // «Tunnel 118°» darf keine Kluftbeschriftung überdecken
+  const overlap = await evaluate(`(() => {
+    const t = document.querySelector('svg.net .tunnel-label').getBoundingClientRect();
+    const hits = [];
+    for (const el of document.querySelectorAll('svg.net .plabel')) {
+      const r = el.getBoundingClientRect();
+      if (t.left < r.right && t.right > r.left && t.top < r.bottom && t.bottom > r.top) hits.push(el.textContent);
+    }
+    return hits;
+  })()`);
+  check('«Tunnel 118°» überdeckt keine Kluftbeschriftung', overlap.length === 0, overlap);
+
   // --- Hover ----------------------------------------------------------------
-  const hover = (sel) => evaluate(`(() => {
+  const hoverSynthetic = (sel) => evaluate(`(() => {
     const el = document.querySelector(${JSON.stringify(sel)});
     const r = el.getBoundingClientRect();
     el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 }));
     const t = document.querySelector('.tip');
     return { hidden: t.hidden, text: t.textContent };
   })()`);
-  const h1 = await hover('svg.net .joint .hit-pole');
-  check('Hover Pol: Name und Fallrichtung/Fallen', !h1.hidden && h1.text === 'Kl 1b\nDip direction / dip: 295° / 85°', h1);
-  const h2 = await hover('svg.section .set .hit');
+  const h2 = await hoverSynthetic('svg.section .set .hit');
   check('Hover Spur: Name, apparent dip, apparent spacing', !h2.hidden && /Apparent dip: 31° \(right\)\nApparent spacing: 9\.85 m/.test(h2.text), h2);
+  // echte Mausbewegung: auf den Pol, dann weg
+  await evaluate(`document.querySelector('.tip').hidden = true`);
+  const pc = await center('svg.net .joint .hit-pole', 2); // SS: weit von den anderen Linien
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pc.x - 30, y: pc.y - 30 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pc.x, y: pc.y });
+  await sleep(150);
+  const over = await evaluate(`({ hidden: document.querySelector('.tip').hidden, text: document.querySelector('.tip').textContent })`);
+  check('Hover Pol (Maus): Name und Fallrichtung/Fallen', !over.hidden && over.text === 'SS\nDip direction/dip: 317/50', over);
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 700, y: 30 });
+  await sleep(150);
+  const away = await evaluate(`document.querySelector('.tip').hidden`);
+  check('Hover-Text verschwindet nach Verlassen des Elements', away === true, away);
 
   // --- Eingabefehler ------------------------------------------------------
   await act(setField('in-azimuth', 'abc'));
@@ -189,14 +237,16 @@ try {
     msg: !document.getElementById('msg').hidden,
     err: document.querySelector('#in-azimuth').closest('.field').querySelector('.err').textContent,
     invalid: document.getElementById('in-azimuth').classList.contains('invalid'),
+    kept: document.getElementById('in-azimuth').value,
     tunnel: document.querySelectorAll('svg.net .tunnel-line').length,
     joints: document.querySelectorAll('svg.net .joint').length,
     sets: document.querySelectorAll('svg.section .set').length,
     profile: document.querySelectorAll('svg.section .profile').length,
-    notes: [...document.querySelectorAll('#results tbody td.note')].map((t) => t.textContent),
+    disabled: ['copy-link', 'export-net-svg', 'export-net-png', 'export-section-svg', 'export-section-png', 'export-both-png'].every((i) => document.getElementById(i).disabled),
   })`);
   check('Ungültige Tunnelrichtung: Fehler am Feld, keine Tunnellinie/Spuren, Rest gezeichnet',
-    bad.msg && bad.err === 'Enter a number' && bad.invalid && bad.tunnel === 0 && bad.joints === 3 && bad.sets === 0 && bad.profile === 1, bad);
+    bad.msg && bad.err === 'Enter a number' && bad.invalid && bad.kept === 'abc' && bad.tunnel === 0 && bad.joints === 3 && bad.sets === 0 && bad.profile === 1, bad);
+  check('Ungültige Eingabe: Copy link und Export gesperrt', bad.disabled, bad.disabled);
   await act(setField('in-azimuth', '118'));
   await act(setField('in-j1-dip', '120'));
   const bad2 = await evaluate(`({
@@ -222,15 +272,43 @@ try {
     swatches: [...document.querySelectorAll('#input-form tbody .swatch')].map((s) => getComputedStyle(s).backgroundColor),
     sets: document.querySelectorAll('svg.section .set').length,
     resultRows: document.querySelectorAll('#results tbody tr').length,
+    names: [document.getElementById('in-j3-name').value, document.getElementById('in-j4-name').value],
+    vals: ['dipDirection', 'dip', 'spacing'].map((k) => document.getElementById('in-j3-' + k).value),
   })`);
   check('5 Zeilen, «Add joint» danach gesperrt, 5 verschiedene Farben', five.rows === 5 && five.disabled && new Set(five.swatches).size === 5, five);
+  check('Neue Klüfte: «Joint 4», «Joint 5» mit 90 / 60 / 1', five.names.join('|') === 'Joint 4|Joint 5' && five.vals.join('|') === '90|60|1', five);
   check('5 Klüfte in Querschnitt und Tabelle', five.sets === 5 && five.resultRows === 5, five);
   await act(`document.querySelector('#input-form button.rm').click()`);
   const four = await evaluate(`({ rows: document.querySelectorAll('#input-form tbody tr[data-index]').length, name: document.getElementById('in-j0-name').value, disabled: document.getElementById('add-joint').disabled })`);
   check('Entfernen einer Zeile', four.rows === 4 && four.name === 'Kl 2b' && !four.disabled, four);
+  const hashBeforeReset = await evaluate('location.hash');
   await act(`document.getElementById('reset-defaults').click()`);
+  const hashAfterReset = await evaluate('location.hash');
+  check('Reset leert den URL-Teil', hashBeforeReset.length > 10 && hashAfterReset === '', { before: hashBeforeReset.slice(0, 40), after: hashAfterReset });
 
-  // --- Light / Dark ---------------------------------------------------------
+  // --- Link mit Eingaben --------------------------------------------------
+  await act(setField('in-azimuth', '45'));
+  await act(setField('in-j0-name', 'Ä & "x", y'));
+  await act(setField('in-width', '12'));
+  await act(`document.getElementById('add-joint').click()`);
+  const changed = await evaluate(`({ json: JSON.stringify(window.app.state), href: location.href, hash: location.hash })`);
+  check('Link: Eingaben stehen im URL-Teil', changed.hash.startsWith('#A=45&B=12&H=8&n=4&j=') && changed.json !== defaultJson, changed.hash.slice(0, 60));
+  await load(changed.href.replace(`${origin}/`, `${origin}/index.html`));
+  const loaded = await evaluate(`({ json: JSON.stringify(window.app.state), name: document.getElementById('in-j0-name').value, az: document.getElementById('in-azimuth').value, title: document.getElementById('title-section').textContent, hash: location.hash })`);
+  check('Link laden: Zustand ist gleich', loaded.json === changed.json && loaded.name === 'Ä & "x", y' && loaded.az === '45' && loaded.title.includes('(45°)') && loaded.hash === changed.hash, { name: loaded.name, az: loaded.az, same: loaded.json === changed.json });
+  await click('#copy-link');
+  await waitFor(`document.getElementById('copy-link').textContent !== 'Copy link'`, 'Rückmeldung Copy link');
+  const copied = await evaluate(`document.getElementById('copy-link').textContent`);
+  check('Copy link: Rückmeldung «Link copied»', copied === 'Link copied', copied);
+  await load(`${origin}/index.html#A=abc&B=-1&H=%&n=2&j=x&j=1,2`);
+  const brokenLoaded = await evaluate(`({ json: JSON.stringify(window.app.state), hash: location.hash, msg: document.getElementById('msg').hidden })`);
+  check('Kaputter Link: Standardwerte, kein Absturz, URL-Teil bereinigt', brokenLoaded.json === defaultJson && brokenLoaded.hash === '' && brokenLoaded.msg === true, brokenLoaded);
+  await load(`${origin}/index.html#A=300`);
+  const partial = await evaluate(`({ az: window.app.state.tunnelAzimuth, joints: window.app.state.joints.length })`);
+  check('Unvollständiger Link: gültiger Teil bleibt, Rest Standard', partial.az === 300 && partial.joints === 3, partial);
+
+  // --- Light / Dark, Export -------------------------------------------------
+  await load(`${origin}/`);
   const colours = async () => evaluate(`({
     bg: getComputedStyle(document.body).backgroundColor,
     joint1: getComputedStyle(document.querySelector('svg.net .joint .gc')).stroke,
@@ -250,23 +328,87 @@ try {
   check('Wahl im Browser gespeichert', stored === 'dark', stored);
   await shot('desktop_dark', 1440, 900, false);
 
+  // Export im dunklen Theme: muss trotzdem hell sein
+  const exportButtons = [
+    ['export-net-svg', 'joints_stereonet.svg'], ['export-net-png', 'joints_stereonet.png'],
+    ['export-section-svg', 'joints_section.svg'], ['export-section-png', 'joints_section.png'],
+    ['export-both-png', 'joints_both.png'],
+  ];
+  const widthOf = {};
+  for (const [btn, name] of exportButtons) {
+    await evaluate(`window.__prev = window.app.lastDownload`);
+    await evaluate(`document.getElementById('${btn}').click()`);
+    await waitFor(`window.app.lastDownload && window.app.lastDownload !== window.__prev`, `Export ${name}`);
+    const info = await evaluate(`(async () => {
+      const d = window.app.lastDownload;
+      const out = { name: d.name, size: d.blob.size, type: d.blob.type };
+      if (d.name.endsWith('.svg')) {
+        const text = await d.blob.text();
+        const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+        out.parseError = Boolean(doc.querySelector('parsererror'));
+        out.root = doc.documentElement.tagName;
+        out.w = Number(doc.documentElement.getAttribute('width'));
+        out.h = Number(doc.documentElement.getAttribute('height'));
+        out.vars = text.includes('var(');
+        out.classes = text.includes('class=');
+        out.texts = doc.querySelectorAll('text').length;
+        out.dark = /#1d1c1a|#141413/i.test(text);
+      } else {
+        const bmp = await createImageBitmap(d.blob);
+        const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+        const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+        const px = ctx.getImageData(0, 0, c.width, c.height).data;
+        let ink = 0;
+        for (let i = 0; i < px.length; i += 4) if (px[i] < 235 || px[i + 1] < 235 || px[i + 2] < 235) ink++;
+        out.w = bmp.width; out.h = bmp.height;
+        out.corner = Array.from(ctx.getImageData(2, 2, 1, 1).data);
+        out.ink = ink / (c.width * c.height);
+      }
+      const b64 = await new Promise((r) => { const f = new FileReader(); f.onload = () => r(String(f.result).split(',')[1]); f.readAsDataURL(d.blob); });
+      out.b64 = b64;
+      return out;
+    })()`);
+    const bytes = Buffer.from(info.b64, 'base64');
+    writeFileSync(join(EXPORTS, name), bytes);
+    delete info.b64;
+    const pngSig = bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    if (name.endsWith('.svg')) {
+      widthOf[name.replace('.svg', '')] = info.w;
+      check(`Export ${name}: gültiges XML, nicht leer, ohne CSS-Variablen und Klassen, hell`, info.name === name && info.size > 3000 && !info.parseError && info.root === 'svg'
+        && !info.vars && !info.classes && !info.dark && info.texts > 10, info);
+    } else {
+      const base = name.replace('.png', '');
+      const expectW = widthOf[base] ? widthOf[base] * 2 : null;
+      check(`Export ${name}: PNG nicht leer, doppelte Auflösung, weisser Grund`, info.name === name && info.type === 'image/png' && pngSig && info.size > 8000
+        && info.w >= 1000 && (expectW === null || info.w === expectW) && info.corner.join(',') === '255,255,255,255' && info.ink > 0.01, { ...info, expectW });
+    }
+  }
+
   // --- Schmale Anzeige ------------------------------------------------------
   await evaluate(`document.querySelector('input[name=theme][value=light]').click()`);
   await viewport(390, 844, true);
-  await send('Page.navigate', { url: `${origin}/` });
-  await waitFor('Boolean(window.app && window.app.ready)', 'App bereit (390 px)');
-  await sleep(500);
-  const phone = await evaluate(`({
-    scrollW: document.documentElement.scrollWidth,
-    inputsAbove: document.getElementById('inputs').getBoundingClientRect().top < document.getElementById('plots').getBoundingClientRect().top,
-    netW: document.querySelector('svg.net').getBoundingClientRect().width,
-    tableScroll: document.querySelector('#results .results-table').getBoundingClientRect().width > document.getElementById('results').clientWidth + 1,
-  })`);
-  check('390 px: kein seitliches Scrollen der Seite, Eingabe oben, Netz passt in die Breite', phone.scrollW <= 390 && phone.inputsAbove && phone.netW <= 390, phone);
+  await load(`${origin}/`);
+  const phone = await evaluate(`(() => {
+    const net = document.querySelector('svg.net').getBoundingClientRect();
+    const sec = document.querySelector('svg.section').getBoundingClientRect();
+    const btn = document.getElementById('export-both-png').getBoundingClientRect();
+    return {
+      scrollW: document.documentElement.scrollWidth,
+      inner: window.innerWidth,
+      inputsAbove: document.getElementById('inputs').getBoundingClientRect().top < document.getElementById('plots').getBoundingClientRect().top,
+      net: [Math.round(net.left), Math.round(net.right)],
+      section: [Math.round(sec.left), Math.round(sec.right)],
+      btn: [Math.round(btn.left), Math.round(btn.right)],
+      cardinals: [...document.querySelectorAll('svg.net .cardinal')].every((t) => { const r = t.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth; }),
+    };
+  })()`);
+  check('390 px: Seite nicht breiter als das Fenster', phone.scrollW <= phone.inner, phone);
+  check('390 px: Netz vollständig sichtbar (Rand, N E S W), Querschnitt und Export-Knopf im Fenster',
+    phone.net[0] >= 0 && phone.net[1] <= phone.inner && phone.cardinals && phone.section[0] >= 0 && phone.section[1] <= phone.inner && phone.btn[1] <= phone.inner && phone.inputsAbove, phone);
   await shot('phone_390', 390, 844, true);
 
   check('Keine Konsolenfehler, Warnungen oder HTTP-Fehler', errors.length === 0, errors.slice(0, 5));
-  const foreign = requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('about:'));
+  const foreign = requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('about:') && !u.startsWith('blob:'));
   check('Keine Anfragen an andere Hosts', foreign.length === 0, foreign.slice(0, 5));
 } catch (e) {
   failures++;

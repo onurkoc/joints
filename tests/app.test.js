@@ -5,7 +5,7 @@ import { close } from './helpers.js';
 import { defaultState, validateState, parseNumber, newJoint, cloneState, MAX_JOINTS } from '../app/state.js';
 import { buildModel, sectionWindow } from '../app/model.js';
 import {
-  fmtAngle, fmtApparentDip, fmtMetres, fmtAzimuth3, fallsTo, jointLabel, esc,
+  fmtAngle, fmtOrientation, fmtLength, fmtApparentDip, fmtMetres, fmtAzimuth3, fallsTo, jointLabel, esc,
 } from '../app/format.js';
 import { resultRows } from '../app/ui/results.js';
 import { renderStereonet } from '../app/plots/stereonet.js';
@@ -90,7 +90,15 @@ test('Format: ganze Grad, 0.01 m, dreistelliger Azimut, Seiten', () => {
   assert.equal(fallsTo(null, 0), 'horizontal');
   assert.equal(fallsTo(null, 90), 'vertical');
   assert.equal(jointLabel('Kl 1b', 295, 85), 'Kl 1b 295/85');
-  assert.equal(jointLabel('  ', 10, 5), '10/5');
+  assert.equal(jointLabel('  ', 10, 5), '010/05');
+  assert.equal(jointLabel('Kl 1b', 7, 5), 'Kl 1b 007/05');
+  assert.equal(fmtOrientation(295, 85), '295/85');
+  assert.equal(fmtOrientation(7, 5), '007/05');
+  assert.equal(fmtOrientation(360, 90), '360/90');
+  assert.equal(fmtOrientation(0, 0), '000/00');
+  assert.equal(fmtOrientation(7.5, 5.25), '007.5/05.3');
+  assert.equal(fmtLength(10), '10');
+  assert.equal(fmtLength(7.254), '7.25');
   assert.equal(esc('<a&"b">'), '&lt;a&amp;&quot;b&quot;&gt;');
 });
 
@@ -110,6 +118,7 @@ test('Modell Standardwerte: scheinbares Fallen nach der Formel, Seite, Abstand',
     assert.ok(j.circle && j.pole);
   }
   assert.deepEqual(m.joints.map((j) => j.dipApparent?.text), ['right', 'right', 'left']);
+  assert.deepEqual(resultRows(m).map((r) => r.orientation), ['295/85', '207/86', '317/50']);
   assert.deepEqual(resultRows(m).map((r) => [r.apparentDip, r.fallsTo]), [['31°', 'right'], ['86°', 'right'], ['21°', 'left']]);
   // Abstand unabhängig über Normale · Tunnelachse (θ), s' = s / sin θ
   const expected = m.joints.map((j) => {
@@ -218,7 +227,7 @@ test('Netz-SVG: Titel-Inhalte, Himmelsrichtungen, Tunnelbeschriftung, Farben als
   assert.equal((svg.match(/class="pole"/g) ?? []).length, 3);
   assert.ok(svg.includes('--c:var(--joint1)') && svg.includes('--c:var(--joint2)') && svg.includes('--c:var(--joint3)'));
   assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(svg), 'keine festen Farben im SVG');
-  assert.ok(svg.includes('data-tip="Kl 1b&#10;Dip direction / dip: 295° / 85°"'));
+  assert.ok(svg.includes('data-tip="Kl 1b&#10;Dip direction/dip: 295/85"'));
 });
 
 test('Netz-SVG: Tunnelpfeil bei A, Pole innerhalb des Netzes', () => {

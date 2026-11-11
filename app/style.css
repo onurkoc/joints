@@ -208,7 +208,7 @@ button.rm:hover { border-color: var(--error); color: var(--error); }
 /* stereonet */
 svg.net .grid { fill: none; stroke: var(--net); stroke-width: 1; }
 svg.net .rim { fill: none; stroke: var(--net-rim); stroke-width: 1.5; }
-svg.net .cardinal { font-weight: 700; font-size: 13px; dominant-baseline: central; }
+svg.net .cardinal { font-weight: 700; font-size: 13px; }
 svg.net .tunnel-line { stroke: var(--tunnel); stroke-width: 2.5; }
 svg.net .tunnel-head { fill: var(--tunnel); stroke: var(--tunnel); stroke-width: 1; stroke-linejoin: round; }
 svg.net .tunnel-label { fill: var(--tunnel); font-weight: 600; paint-order: stroke; stroke: var(--halo); stroke-width: 3px; stroke-linejoin: round; }
@@ -250,3 +250,9 @@ table.data td.note { white-space: normal; color: var(--muted); }
 
 footer { border-top: 1px solid var(--line); padding: 20px 0 32px; color: var(--muted); font-size: 14px; }
 footer a { color: inherit; }
+
+/* plot cards: title and export buttons */
+.plot-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; }
+.plot-head h2 { margin: 0; }
+.plot-head .actions button { padding: 3px 10px; font-size: 13px; }
+.plots-actions { justify-content: flex-end; margin: -4px 0 0; }

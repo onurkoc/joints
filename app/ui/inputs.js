@@ -18,6 +18,7 @@ import { jointColorVar } from '../plots/svg.js';
  * @property {() => void} onAdd
  * @property {(i: number) => void} onRemove
  * @property {() => void} onReset
+ * @property {() => void} onCopyLink
  */
 
 /**
@@ -184,6 +185,8 @@ export function renderInputs(container, on) {
 
   const reset = h('button', { type: 'button', id: 'reset-defaults' }, ['Reset to defaults']);
   reset.addEventListener('click', () => on.onReset());
+  const copy = h('button', { type: 'button', id: 'copy-link' }, ['Copy link']);
+  copy.addEventListener('click', () => on.onCopyLink());
 
   container.append(
     h('fieldset', {}, [h('legend', {}, ['Tunnel']), azField]),
@@ -194,7 +197,7 @@ export function renderInputs(container, on) {
       jointsErr,
       h('div', { class: 'actions form-actions left' }, [addBtn]),
     ]),
-    h('div', { class: 'actions form-actions' }, [reset]),
+    h('div', { class: 'actions form-actions' }, [copy, reset]),
   );
 
   /**
