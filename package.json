@@ -1,0 +1,13 @@
+{
+  "name": "joints",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kluftscharen im Schmidtschen Netz und im Tunnelquerschnitt",
+  "engines": {
+    "node": ">=21"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}

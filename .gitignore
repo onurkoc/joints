@@ -1,0 +1,8 @@
+# Vertraulich (siehe CLAUDE.md)
+*.gh
+*.3dm
+*.3dmbak
+legacy/
+References/
+
+node_modules/
