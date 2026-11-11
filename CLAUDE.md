@@ -36,3 +36,13 @@
 - Hufeisenprofil: Breite B, Höhe H, flache Sohle bei z = 0, senkrechte Ulmen bis
   H − B/2, Halbkreis-Kalotte mit Radius B/2. Bedingung H ≥ B/2. Standard B = 10 m, H = 8 m.
 - Spurenschar: parallele Geraden im Abstand s', eine davon durch die Profilmitte (0, H/2).
+
+## Oberfläche
+- Sprache der Oberfläche: Englisch. Der Rechenkern liefert side 'rechts'/'links'/null;
+  die Oberfläche übersetzt in «right» / «left» / «horizontal» / «vertical».
+- Anzeige: scheinbares Fallen auf ganze Grad, Abstände auf 0.01 m.
+- Maximal 5 Klüfte. Farben in dieser Reihenfolge: grün, rot, blau, orange, türkis.
+  Tunnel: violett.
+- Beschriftung einer Kluft: Name, dann Fallrichtung/Fallen, z. B. «Kl 1b 295/85».
+- Umschalter System / Light / Dark. Alle Farben über CSS-Variablen, auch im SVG.
+- Browser-Check nur einmal ausführen, keine Wiederholungsserien.
